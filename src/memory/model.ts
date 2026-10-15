@@ -151,7 +151,18 @@ export function buildModel(snap: MemorySnapshot): MemoryModel {
   };
 }
 
-const shq = (s: string, os: string) => (os === "windows" ? `'${s.replace(/'/g, "''")}'` : `'${s.replace(/'/g, `'\\''`)}'`);
+/**
+ * Quote for the script's shell. App and model names are untrusted input.
+ * PowerShell also treats the typographic quotes ‘ ’ ‚ ‛ as single quotes; each is escaped by doubling it.
+ */
+export const shq = (s: string, os: string) =>
+  os === "windows" ? `'${s.replace(/['\u2018\u2019\u201A\u201B]/g, "$&$&")}'` : `'${s.replace(/'/g, `'\\''`)}'`;
+
+/** A string literal for AppleScript, e.g. inside `quit app "..."`. */
+const appleScriptString = (s: string) => `"${s.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+
+/** Text for a `#` comment line: control characters (like a newline in a name) would end the comment. */
+const comment = (s: string) => s.replace(/[\u0000-\u001f\u007f]/g, " ");
 
 function recommendations(snap: MemorySnapshot, user: MemNode[]): MemRec[] {
   const os = snap.platform;
@@ -171,7 +182,7 @@ function recommendations(snap: MemorySnapshot, user: MemNode[]): MemRec[] {
     const app = g.appPath !== undefined;
     const ids = g.pids.join(os === "windows" ? "," : " ");
     const commands =
-      os === "macos" && app ? [`osascript -e ${shq(`quit app "${g.name}"`, os)}`]
+      os === "macos" && app ? [`osascript -e ${shq(`quit app ${appleScriptString(g.name)}`, os)}`]
         : os === "windows" && app ? [`Get-Process -Id ${ids} -ErrorAction SilentlyContinue | ForEach-Object { $_.CloseMainWindow() | Out-Null }`]
           : os === "windows" ? [`Stop-Process -Id ${ids} -ErrorAction SilentlyContinue`]
             : [`kill ${ids}`];
@@ -196,7 +207,7 @@ export function script(recs: MemRec[], os: string): string {
   const lines = os === "windows"
     ? ["# DiskLens memory script (PowerShell)", `# Frees about ${total} of RAM across ${recs.length} item(s). Read it before running.`, ""]
     : ["#!/bin/bash", "# DiskLens memory script", `# Frees about ${total} of RAM across ${recs.length} item(s). Read it before running.`, "set -u", ""];
-  for (const r of recs) lines.push(`# ${r.title}: ${ramSize(r.size)}`, say(`-> ${r.title} (${ramSize(r.size)})`), ...r.commands, "");
+  for (const r of recs) lines.push(`# ${comment(r.title)}: ${ramSize(r.size)}`, say(`-> ${r.title} (${ramSize(r.size)})`), ...r.commands, "");
   return lines.join("\n");
 }
 

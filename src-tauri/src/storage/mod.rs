@@ -246,7 +246,7 @@ impl Session {
         };
         for r in recs {
             let size = fmt_size(r.size(&self.tree));
-            lines.push(format!("# {}: {}{}", r.title, size, if r.kind.safe() { "" } else { " (reviewed by you)" }));
+            lines.push(format!("# {}: {}{}", rules::comment(&r.title), size, if r.kind.safe() { "" } else { " (reviewed by you)" }));
             lines.push(rules::echo(&format!("-> {} ({size})", r.title)));
             lines.extend(self.commands(r));
             lines.push(String::new());

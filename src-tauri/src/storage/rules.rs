@@ -206,12 +206,31 @@ pub fn windows() -> bool {
 }
 
 /// Quote for the script's shell: POSIX single quotes, or PowerShell single quotes.
+/// File names are untrusted input, so this must hold for any name.
 pub fn quote(s: &str) -> String {
-    if windows() {
-        format!("'{}'", s.replace('\'', "''"))
-    } else {
-        format!("'{}'", s.replace('\'', r"'\''"))
+    if windows() { quote_powershell(s) } else { quote_posix(s) }
+}
+
+pub fn quote_posix(s: &str) -> String {
+    format!("'{}'", s.replace('\'', r"'\''"))
+}
+
+/// PowerShell also treats the typographic quotes ‘ ’ ‚ ‛ as single quotes; each is escaped by doubling it.
+pub fn quote_powershell(s: &str) -> String {
+    let mut out = String::from("'");
+    for c in s.chars() {
+        if matches!(c, '\'' | '\u{2018}' | '\u{2019}' | '\u{201A}' | '\u{201B}') {
+            out.push(c);
+        }
+        out.push(c);
     }
+    out.push('\'');
+    out
+}
+
+/// Text for a `#` comment line: control characters (like a newline in a folder name) would end the comment.
+pub fn comment(s: &str) -> String {
+    s.chars().map(|c| if c.is_control() { ' ' } else { c }).collect()
 }
 
 pub fn remove(path: &str) -> String {
@@ -232,4 +251,82 @@ pub fn empty_folder(path: &str) -> String {
 
 pub fn echo(text: &str) -> String {
     if windows() { format!("Write-Host {}", quote(text)) } else { format!("echo {}", quote(text)) }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Names an attacker could give a file or folder.
+    const HOSTILE: &[&str] = &[
+        "plain",
+        "it's",
+        "a'; touch /tmp/disklens-pwned; echo '",
+        "$(touch /tmp/disklens-pwned)",
+        "`touch /tmp/disklens-pwned`",
+        "back\\slash\" and $HOME",
+        "line\nbreak'; touch /tmp/disklens-pwned #",
+        "curly \u{2019}; New-Item pwned; \u{2018}",
+    ];
+
+    #[cfg(unix)]
+    #[test]
+    fn posix_quoting_round_trips_through_bash() {
+        let _ = std::fs::remove_file("/tmp/disklens-pwned");
+        for name in HOSTILE {
+            let out = std::process::Command::new("bash")
+                .arg("-c")
+                .arg(format!("printf %s {}", quote_posix(name)))
+                .output()
+                .unwrap();
+            assert_eq!(String::from_utf8_lossy(&out.stdout), *name);
+        }
+        assert!(!std::path::Path::new("/tmp/disklens-pwned").exists(), "a quoted name executed a command");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn powershell_quoting_never_runs_commands() {
+        let marker = std::env::temp_dir().join("disklens-pwned");
+        let _ = std::fs::remove_file(&marker);
+        let m = marker.to_string_lossy();
+        for name in [
+            format!("a'; New-Item -Path '{m}'; '"),
+            format!("a\u{2019}; New-Item -Path '{m}'; \u{2018}"),
+            format!("$(New-Item -Path '{m}')"),
+        ] {
+            let status = std::process::Command::new("powershell")
+                .args(["-NoProfile", "-Command", &format!("$x = {}", quote_powershell(&name))])
+                .status()
+                .unwrap();
+            assert!(status.success());
+        }
+        assert!(!marker.exists(), "a quoted name executed a command");
+    }
+
+    #[test]
+    fn powershell_quoting_doubles_every_quote_kind() {
+        assert_eq!(quote_powershell("it's"), "'it''s'");
+        assert_eq!(quote_powershell("a\u{2019}b"), "'a\u{2019}\u{2019}b'");
+        // Every quote-like character inside the literal must come in pairs.
+        for name in HOSTILE {
+            let q = quote_powershell(name);
+            let inner: Vec<char> = q[1..q.len() - 1].chars().collect();
+            let mut i = 0;
+            while i < inner.len() {
+                if matches!(inner[i], '\'' | '\u{2018}' | '\u{2019}' | '\u{201A}' | '\u{201B}') {
+                    assert_eq!(inner.get(i + 1), Some(&inner[i]), "unpaired quote in {q}");
+                    i += 2;
+                } else {
+                    i += 1;
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn comments_stay_on_one_line() {
+        assert_eq!(comment("repo\nrm -rf ~ worktrees"), "repo rm -rf ~ worktrees");
+        assert!(!comment("a\r\nb\u{7f}").chars().any(|c| c.is_control()));
+    }
 }
