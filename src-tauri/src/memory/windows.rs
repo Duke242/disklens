@@ -1,12 +1,21 @@
 //! Windows: totals and per-process memory from the `sysinfo` crate.
 
 use super::{Proc, Snapshot};
-use sysinfo::{ProcessesToUpdate, System, Users};
+use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind, Users};
 
 pub fn snapshot() -> Snapshot {
     let mut sys = System::new();
     sys.refresh_memory();
-    sys.refresh_processes(ProcessesToUpdate::All, true);
+    // Owners and executable paths aren't loaded unless asked for; without the owner every
+    // process would look like a system process.
+    sys.refresh_processes_specifics(
+        ProcessesToUpdate::All,
+        true,
+        ProcessRefreshKind::nothing()
+            .with_memory()
+            .with_exe(UpdateKind::OnlyIfNotSet)
+            .with_user(UpdateKind::OnlyIfNotSet),
+    );
     let users = Users::new_with_refreshed_list();
 
     let mut s = Snapshot { platform: "windows", ..Default::default() };
