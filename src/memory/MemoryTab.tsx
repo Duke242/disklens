@@ -101,8 +101,6 @@ export function MemoryTab({ visible, palette }: { visible: boolean; palette: Pal
         <StatCell label="Memory used" value={ramSize(s.used)}
           suffix={selectedBytes > 0 ? `−${ramSize(selectedBytes)}` : `of ${ramSize(s.total)}`}
           suffixColor={selectedBytes > 0 ? palette.safe.dot : undefined} />
-        <StatCell label="Available" dot={palette.safe.dot} value={ramSize(s.free + s.cached)}
-          suffix={`${ramSize(s.cached)} is cache`} />
         <StatCell label="Your apps" dot={palette.blue.dot} value={ramSize(model.mine)}
           suffix={model.appCount ? plural(model.appCount, "app") : `${model.userProcessCount} processes`} />
         <StatCell label={s.wired ? "System & kernel" : "System"} dot={palette.gray.dot} value={ramSize(model.system + s.wired)}

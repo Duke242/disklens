@@ -136,7 +136,8 @@ export function StorageTab({ platform, palette }: { platform: Platform; palette:
       )}
 
       <div className="card stats">
-        <StatCell label="Free after cleanup" value={disk ? diskSize(disk.available + selectedBytes) : "—"}
+        <StatCell label="Disk used" value={disk ? diskSize(disk.used) : "—"} suffix={disk ? `of ${diskSize(disk.total)}` : ""} />
+        <StatCell label={selectedBytes > 0 ? "Free after cleanup" : "Free"} value={disk ? diskSize(disk.available + selectedBytes) : "—"}
           suffix={selectedBytes > 0 ? `+${diskSize(selectedBytes)}` : ""} suffixColor={palette.safe.dot} />
         <StatCell label="Safe to remove" dot={palette.safe.dot} value={summary ? diskSize(safe.reduce((s, r) => s + r.size, 0)) : "—"}
           suffix={summary ? plural(safe.length, "item") : ""} />
