@@ -24,14 +24,13 @@ pub fn snapshot() -> Snapshot {
         }
     }
     let get = |k: &str| pages.get(k).copied().unwrap_or(0);
-    let purgeable = get("Pages purgeable");
-    let app = get("Anonymous pages").saturating_sub(purgeable);
     s.wired = get("Pages wired down");
     s.compressed = get("Pages occupied by compressor");
-    s.cached = get("File-backed pages") + purgeable;
-    // Activity Monitor's definition of "Memory Used".
-    s.used = app + s.wired + s.compressed;
-    s.free = s.total.saturating_sub(s.used + s.cached);
+    s.cached = get("File-backed pages") + get("Pages purgeable");
+    s.free = get("Pages free");
+    // Activity Monitor's "Memory Used": everything that isn't free or cache. That's more than
+    // app + wired + compressed, because the kernel also holds pages outside those counters.
+    s.used = s.total.saturating_sub(s.free + s.cached);
 
     let swap = run("/usr/sbin/sysctl", &["-n", "vm.swapusage"]);
     s.swap_total = parse_mb_field(&swap, "total");
