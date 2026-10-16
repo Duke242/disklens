@@ -161,8 +161,8 @@ export const shq = (s: string, os: string) =>
 /** A string literal for AppleScript, e.g. inside `quit app "..."`. */
 const appleScriptString = (s: string) => `"${s.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
 
-/** Text for a `#` comment line: control characters (like a newline in a name) would end the comment. */
-const comment = (s: string) => s.replace(/[\u0000-\u001f\u007f]/g, " ");
+/** Text for a `#` comment line: control characters and line separators (like a newline in a name) could end the comment. */
+const comment = (s: string) => s.replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/g, " ");
 
 function recommendations(snap: MemorySnapshot, user: MemNode[]): MemRec[] {
   const os = snap.platform;

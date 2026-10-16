@@ -230,7 +230,7 @@ pub fn quote_powershell(s: &str) -> String {
 
 /// Text for a `#` comment line: control characters (like a newline in a folder name) would end the comment.
 pub fn comment(s: &str) -> String {
-    s.chars().map(|c| if c.is_control() { ' ' } else { c }).collect()
+    s.chars().map(|c| if c.is_control() || matches!(c, '\u{2028}' | '\u{2029}') { ' ' } else { c }).collect()
 }
 
 pub fn remove(path: &str) -> String {
@@ -327,6 +327,7 @@ mod tests {
     #[test]
     fn comments_stay_on_one_line() {
         assert_eq!(comment("repo\nrm -rf ~ worktrees"), "repo rm -rf ~ worktrees");
-        assert!(!comment("a\r\nb\u{7f}").chars().any(|c| c.is_control()));
+        assert!(!comment("a\r\nb\u{7f}\u{85}").chars().any(|c| c.is_control()));
+        assert_eq!(comment("a\u{2028}b\u{2029}c"), "a b c");
     }
 }
